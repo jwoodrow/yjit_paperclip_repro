@@ -1,0 +1,88 @@
+version: '3'
+name: yjit-paperclip
+networks:
+  development:
+    name: development
+volumes:
+  bundle_cache:
+    name: bundle_cache
+  vendor_cache:
+    name: vendor_cache
+  minio_data:
+    name: minio_data
+  pg_data:
+    name: pg_data
+  pg_shared_data:
+    name: pg_shared_data
+services:
+  postgres:
+    image: postgres:14-alpine
+    container_name: service-postgres
+    volumes:
+      - 'pg_data:/var/lib/postgresql/data:delegated'
+      - 'pg_shared_data:/var/shared:delegated'
+    networks:
+      - development
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    user: postgres
+    ports:
+      - 5432:5432
+    expose:
+      - 5432
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 10s
+      timeout: 5s
+      retries: 2
+      start_period: 10s
+    restart: unless-stopped
+  minio:
+    image: minio/minio
+    container_name: minio
+    command: server -C /etc/minio --address ":9000" --console-address ":9001" /data
+    networks:
+      - development
+    ports:
+      - 9000:9000
+      - 9001:9001
+    expose:
+      - 9000
+      - 9001
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: password
+    volumes:
+      - 'minio_data:/data:delegated'
+    healthcheck:
+      test: ["CMD", "curl", "-Ifs", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 2
+      start_period: 10s
+    restart: unless-stopped
+  app:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      # args:
+        # YARN_CACHE_FOLDER: /home/docker/mooncard/vendor/yarn-cache
+        # CHILD_CONCURRENCY: 4
+        # BUNDLE_PATH: /home/docker/bundle/vendor
+    image: yjit-paperclip
+    container_name: yjit-app
+    networks:
+      - development
+    volumes:
+      - '.:/app:cached'
+      - 'vendor_cache:/app/vendor/cache:cached'
+      - 'bundle_cache:/root/.bundle'
+    stdin_open: true
+    tty: true
+    entrypoint: ['/bin/bash', '-c']
+    command: '"tail -f /dev/null"'
+    depends_on:
+      minio:
+        condition: service_healthy
+

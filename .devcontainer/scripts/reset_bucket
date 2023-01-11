@@ -1,0 +1,20 @@
+#!/bin/bash -l
+
+BUCKETS=(development)
+POLICY=public
+REGION=eu-west-3
+MINIO_ENDPOINT=minio:9000
+MINIO_PASSWORD=password
+MINIO_USER=minio
+
+for bucket in "${BUCKETS[@]}"
+do
+  echo "Resetting $bucket | region=$REGION | policy=$POLICY"
+  mc alias set minio http://$MINIO_ENDPOINT $MINIO_USER $MINIO_PASSWORD > /dev/null
+  mc rm -r --force minio/$bucket > /dev/null
+  mc mb minio/$bucket --region=$REGION > /dev/null
+  mc anonymous set $POLICY minio/$bucket > /dev/null
+  echo "$bucket reset"
+done
+
+exit 0
